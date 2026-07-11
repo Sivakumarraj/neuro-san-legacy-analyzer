@@ -54,10 +54,7 @@ User sends legacy code
 | **Migration Risk Assessor** | LLM | Evaluating risk requires judgment |
 | **Spec Generator** | LLM | Writing structured documents requires language ability |
 
-## Project Structure
-
-```
-CTSanti/
+neuro-san-legacy-analyzer/
 ├── coded_tools/legacy_extraction/  # Python CodedTool implementations
 │   ├── code_parser_tool.py         # Deterministic code structure extractor
 │   └── dependency_mapper_tool.py   # Deterministic dependency tracer
@@ -70,11 +67,14 @@ CTSanti/
 │   ├── cobol_payment.cob           # Payment processing with late fees
 │   ├── cobol_inventory.cob         # Inventory management with reorder logic
 │   └── java_legacy_billing.java    # Billing with JDBC, deprecated APIs
+├── tests/                          # Unit tests for the CodedTools
+│   ├── test_code_parser_tool.py
+│   └── test_dependency_mapper_tool.py
 ├── .env.example                    # API key template (copy to .env)
 ├── .gitignore                      # Excludes .env and Python artifacts
+├── LICENSE                         # MIT license
 ├── pyproject.toml                  # Dependencies and project metadata
 └── README.md                       # This file
-```
 
 ## Setup Instructions
 
@@ -83,24 +83,24 @@ CTSanti/
 - Python 3.10 or higher
 - A Google Gemini API key ([get one here](https://aistudio.google.com/apikey))
 
-### Step 1: Clone and Install
-
 **Using uv (recommended):**
 ```bash
-cd CTSanti
+git clone https://github.com/Sivakumarraj/neuro-san-legacy-analyzer.git
+cd neuro-san-legacy-analyzer
 uv venv
-uv pip install -e .
+uv pip install -e ".[dev]"
 ```
 
 **Using pip:**
 ```bash
-cd CTSanti
+git clone https://github.com/Sivakumarraj/neuro-san-legacy-analyzer.git
+cd neuro-san-legacy-analyzer
 python -m venv .venv
 # Windows:
 .venv\Scripts\activate
 # macOS/Linux:
 # source .venv/bin/activate
-pip install -e .
+pip install -e ".[dev]"
 ```
 
 ### Step 2: Configure API Key
@@ -141,6 +141,21 @@ ns check-config
 ```
 
 This should confirm the HOCON is valid and the agent network loads correctly.
+
+
+## Running the Unit Tests
+
+The two CodedTools are deterministic (pure regex, no LLM), so they are fully
+unit-tested against the bundled sample files:
+
+```bash
+uv run pytest
+```
+
+All tests should pass — they verify paragraph/method extraction, business
+calculation detection, external call tracing, file I/O mapping, and error
+handling for both COBOL and Java samples.
+
 
 ### Step 5: Run the Server
 
