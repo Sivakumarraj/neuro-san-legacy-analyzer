@@ -1,10 +1,22 @@
 # Legacy Business-Rule Extraction Agent Network
 
-> Extract business rules from legacy code (COBOL, Java, PL/SQL) and output a modernization-ready specification — powered by [Cognizant Neuro SAN](https://github.com/cognizant-ai-lab/neuro-san-studio).
+> Extract business rules from legacy code (COBOL, Java, PL/SQL) and output a
+> modernization-ready specification — powered by
+> [Cognizant Neuro SAN](https://github.com/cognizant-ai-lab/neuro-san-studio).
 
-## What This Project Does
+[![Neuro SAN](https://img.shields.io/badge/Neuro%20SAN-Community%20Project-blue)](https://github.com/cognizant-ai-lab/neuro-san-studio)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-green)](https://python.org)
+[![LLM](https://img.shields.io/badge/LLM-Gemini%202.5%20Flash-orange)](https://ai.google.dev)
+[![License](https://img.shields.io/badge/License-MIT-lightgrey)](./LICENSE)
 
-Large enterprises run critical business logic in decades-old COBOL, Java, and PL/SQL code. Before modernizing, they need to know **what the code actually does** in business terms. This project automates that extraction using a 6-agent AI network:
+---
+
+## Overview
+
+Large enterprises run critical business logic in decades-old COBOL, Java, and
+PL/SQL code. Before modernizing, they need to know **what the code actually
+does** in business terms. This project automates that extraction using a
+6-agent Neuro SAN network:
 
 ```
 User sends legacy code
@@ -19,7 +31,7 @@ User sends legacy code
      ▼   │   ▼   │
 ┌────────┐│┌─────────┐
 │2.Code  │││4.Depend-│
-│ Parser │││  ency   │  ← These two are CodedTools (deterministic, no LLM)
+│ Parser │││  ency   │  ← CodedTools (deterministic, no LLM)
 │(Coded) │││ Mapper  │
 │        │││(Coded)  │
 └───┬────┘│└────┬────┘
@@ -27,7 +39,7 @@ User sends legacy code
     ▼     ▼     ▼
 ┌────────┐ ┌─────────┐
 │3.Biz   │ │5.Migra- │
-│ Rule   │ │  tion   │  ← These two are LLM agents (judgment + interpretation)
+│ Rule   │ │  tion   │  ← LLM agents (judgment + interpretation)
 │Extract │ │  Risk   │
 │ (LLM)  │ │ (LLM)   │
 └───┬────┘ └────┬────┘
@@ -43,17 +55,26 @@ User sends legacy code
   Modernization Spec
 ```
 
-## Why CodedTool vs LLM?
+## Design Rationale: CodedTool vs LLM
+
+Each agent type is chosen deliberately. Parsing and dependency tracing are
+deterministic pattern-matching problems — a regex will always find
+`PERFORM CALCULATE-LATE-FEE`, with zero hallucination risk. Interpretation,
+risk evaluation, and document writing require natural-language understanding
+and judgment — that is where LLM agents add value.
 
 | Agent | Type | Reasoning |
 |-------|------|-----------|
-| **Front-Man** | LLM | Needs to understand user intent and orchestrate |
+| **Front-Man** | LLM | Understands user intent and orchestrates the workflow |
 | **Code Parser** | CodedTool | Parsing is deterministic regex — no hallucination |
 | **Business Rule Extractor** | LLM | Interpreting code semantics requires NL understanding |
 | **Dependency Mapper** | CodedTool | Tracing CALL/IMPORT is exact pattern matching |
 | **Migration Risk Assessor** | LLM | Evaluating risk requires judgment |
 | **Spec Generator** | LLM | Writing structured documents requires language ability |
 
+## Project Structure
+
+```
 neuro-san-legacy-analyzer/
 ├── coded_tools/legacy_extraction/  # Python CodedTool implementations
 │   ├── code_parser_tool.py         # Deterministic code structure extractor
@@ -63,7 +84,7 @@ neuro-san-legacy-analyzer/
 │   └── manifest.hocon              # Registers the network with Neuro SAN
 ├── config/
 │   └── llm_config.hocon            # Gemini 2.5 Flash LLM configuration
-├── sample_data/                    # Test files
+├── sample_data/                    # Sample legacy programs
 │   ├── cobol_payment.cob           # Payment processing with late fees
 │   ├── cobol_inventory.cob         # Inventory management with reorder logic
 │   └── java_legacy_billing.java    # Billing with JDBC, deprecated APIs
@@ -75,6 +96,7 @@ neuro-san-legacy-analyzer/
 ├── LICENSE                         # MIT license
 ├── pyproject.toml                  # Dependencies and project metadata
 └── README.md                       # This file
+```
 
 ## Setup Instructions
 
@@ -83,7 +105,10 @@ neuro-san-legacy-analyzer/
 - Python 3.10 or higher
 - A Google Gemini API key ([get one here](https://aistudio.google.com/apikey))
 
+### Step 1: Clone and Install
+
 **Using uv (recommended):**
+
 ```bash
 git clone https://github.com/Sivakumarraj/neuro-san-legacy-analyzer.git
 cd neuro-san-legacy-analyzer
@@ -92,6 +117,7 @@ uv pip install -e ".[dev]"
 ```
 
 **Using pip:**
+
 ```bash
 git clone https://github.com/Sivakumarraj/neuro-san-legacy-analyzer.git
 cd neuro-san-legacy-analyzer
@@ -114,6 +140,7 @@ cp .env.example .env
 ```
 
 Set the environment variable (if not using python-dotenv auto-load):
+
 ```bash
 # Windows PowerShell:
 $env:GOOGLE_API_KEY="your-actual-key-here"
@@ -142,6 +169,13 @@ ns check-config
 
 This should confirm the HOCON is valid and the agent network loads correctly.
 
+### Step 5: Run the Server
+
+```bash
+uv run ns run
+```
+
+The network serves on **port 8080** by default.
 
 ## Running the Unit Tests
 
@@ -156,18 +190,10 @@ All tests should pass — they verify paragraph/method extraction, business
 calculation detection, external call tracing, file I/O mapping, and error
 handling for both COBOL and Java samples.
 
+## Usage Example
 
-### Step 5: Run the Server
-
-```bash
-uv run ns run
-```
-
-The network serves on **port 8080** by default.
-
-## Testing with Sample Data
-
-Once the server is running, you can send requests through the Neuro SAN client or API. Example using the COBOL payment sample:
+Once the server is running, send a request through the Neuro SAN client or
+API. Example using the COBOL payment sample:
 
 ```
 Analyze this COBOL payment processing program and extract its business rules:
@@ -177,32 +203,28 @@ Analyze this COBOL payment processing program and extract its business rules:
 The language is cobol.
 ```
 
-Expected output: A structured modernization specification with:
-- Business rules (late fee calculation, early payment discount, high-value check)
-- Dependencies (CALL 'HIGHVAL01', 'NOTIF01', 'LEDGER01', file I/O)
-- Risks (hardcoded rates, external program coupling)
-- Migration recommendations
+Expected output: a structured modernization specification containing:
 
-## How It Works (Interview-Ready Explanation)
-
-> "This project uses Cognizant's Neuro SAN framework to build a multi-agent system.
-> The agents are defined declaratively in a HOCON file — no hardcoded orchestration.
-> Two agents are **CodedTools** (deterministic Python using regex) for parsing code
-> structure and mapping dependencies. Three agents are **LLM-powered** (Gemini) for
-> tasks requiring judgment: extracting business rules in plain English, assessing
-> migration risks, and generating a modernization spec. The front-man agent
-> orchestrates the workflow. The key insight is that parsing is deterministic
-> (regex is reliable), while interpretation requires AI (an LLM can explain
-> what 'COMPUTE WS-LATE-FEE = PR-AMOUNT-DUE * 0.05' means in business terms)."
+- **Business rules** — late fee calculation, early payment discount, high-value check
+- **Dependencies** — `CALL 'HIGHVAL01'`, `'NOTIF01'`, `'LEDGER01'`, file I/O
+- **Risks** — hardcoded rates, external program coupling
+- **Migration recommendations** — target architecture and priority order
 
 ## Key Concepts
 
-- **HOCON**: Human-Optimized Config Object Notation — JSON-like but supports comments and multi-line strings. Used by Neuro SAN for declarative agent definitions.
-- **CodedTool**: A Python class that extends `CodedTool` and implements `async_invoke`. Runs deterministic code — no LLM, no hallucination.
-- **Front-Man**: The first agent in the `tools` array. Receives user input, has no `parameters` in its `function` block, cannot be a CodedTool.
-- **sly_data**: A private data channel for passing sensitive info between agents without exposing it to the LLM's context. Not used in this project but available.
-- **manifest.hocon**: Maps agent network files to `true`/`false` — tells the server which networks to load.
+- **HOCON**: Human-Optimized Config Object Notation — JSON-like but supports
+  comments and multi-line strings. Used by Neuro SAN for declarative agent
+  definitions.
+- **CodedTool**: A Python class that extends `CodedTool` and implements
+  `async_invoke`. Runs deterministic code — no LLM, no hallucination.
+- **Front-Man**: The first agent in the `tools` array. Receives user input,
+  has no `parameters` in its `function` block, cannot be a CodedTool.
+- **sly_data**: A private data channel for passing sensitive info between
+  agents without exposing it to the LLM's context. Not used in this project
+  but available.
+- **manifest.hocon**: Maps agent network files to `true`/`false` — tells the
+  server which networks to load.
 
 ## License
 
-MIT
+[MIT](./LICENSE)
