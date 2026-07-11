@@ -1,0 +1,12 @@
+{
+    "meta/llama-3.3-70b-instruct": {
+        "class": "openai"
+        "modalities": {
+            "input": [ "text" ]
+            "output": [ "text" ]
+        }
+        "capabilities": [ "tools" ]
+        "context_window_size": 131072
+        "max_output_tokens": 4096
+    }
+}

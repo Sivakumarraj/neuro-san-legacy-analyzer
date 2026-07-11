@@ -1,0 +1,41 @@
+# ============================================================================
+# pyproject.toml — Project metadata and dependency definitions.
+#
+# WHAT THIS FILE DOES:
+#   Defines the project name, Python version requirement, and all dependencies
+#   needed to run the agent network. Used by pip/uv to install everything.
+#
+# KEY DEPENDENCIES:
+#   - neuro-san-studio: The Cognizant framework that runs our agent network
+#   - langchain-openai: Connects LangChain (used by Neuro SAN) to NVIDIA NIM via OpenAI-compatible API
+#   - python-dotenv: Loads .env file so NVIDIA_API_KEY is available
+# ============================================================================
+
+[build-system]
+requires = ["setuptools>=77.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "legacy-rule-extractor"
+version = "0.1.0"
+description = "Multi-agent system that extracts business rules from legacy code (COBOL, Java, PL/SQL) using Cognizant's Neuro SAN framework."
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "Siva" }]
+readme = "README.md"
+
+dependencies = [
+    "neuro-san-studio",
+    "langchain-openai",
+    "python-dotenv",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["coded_tools*", "registries*", "config*"]

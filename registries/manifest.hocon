@@ -1,0 +1,16 @@
+# ============================================================================
+# manifest.hocon — Registry manifest that tells the Neuro SAN server which
+# agent networks to load on startup.
+#
+# WHAT THIS FILE DOES:
+#   Maps each agent network HOCON file to a boolean. When set to true, the
+#   server loads that network and makes it available for queries.
+#
+# HOW IT CONNECTS:
+#   The `ns run` command reads this file (via the AGENT_MANIFEST_FILE env var)
+#   to discover which networks to serve. Our single network is
+#   legacy_business_rules.hocon.
+# ============================================================================
+{
+    "legacy_business_rules.hocon": true
+}

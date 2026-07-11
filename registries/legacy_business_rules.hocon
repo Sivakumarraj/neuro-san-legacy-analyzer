@@ -1,0 +1,423 @@
+# ============================================================================
+# legacy_business_rules.hocon — Agent Network Definition (6 Agents)
+#
+# WHAT THIS FILE DOES:
+#   Declares the entire multi-agent network for legacy business-rule extraction.
+#   This is the "brain" of the project — it tells Neuro SAN which agents exist,
+#   what each one does, which tools each can call, and how they connect.
+#
+# ARCHITECTURE (data flows top to bottom):
+#   User → Front-Man → CodeParser (deterministic) + DependencyMapper (deterministic)
+#                     → BusinessRuleExtractor (LLM) + MigrationRiskAssessor (LLM)
+#                     → SpecGenerator (LLM) → Final document back to user
+#
+# HOCON FORMAT RULES FOLLOWED:
+#   - Root braces { } wrapping everything
+#   - All keys are "quoted"
+#   - Short-form class refs (module.ClassName, not full package path)
+#   - Front-man is first in tools[], has no function.parameters
+#   - CodedTools have "class" key, LLM agents do not
+#   - metadata.sample_queries included for the front-man
+# ============================================================================
+{
+    # Metadata — describes this network to the Neuro SAN server/UI
+    "metadata": {
+        "description": "Extracts business rules from legacy code (COBOL, Java, PL/SQL) and generates a modernization-ready specification document."
+        "tags": ["legacy", "modernization", "cobol", "java", "plsql", "business-rules"]
+        "sample_queries": [
+            "Analyze this COBOL payment processing program and extract its business rules.",
+            "Parse this legacy Java billing class and generate a modernization spec.",
+            "What are the migration risks in this PL/SQL stored procedure?"
+        ]
+    },
+
+    # Load the shared LLM configuration (Gemini 2.5 Flash)
+    # This path is relative to the project root
+    include "config/llm_config.hocon",
+
+    # ========================================================================
+    # TOOLS (AGENTS) — the 6-agent network
+    # ========================================================================
+    "tools": [
+
+        # ====================================================================
+        # AGENT 1: Front-Man (Orchestrator)
+        # TYPE: LLM agent (no "class" key, no "parameters" in function)
+        # ROLE: Receives user's legacy code + language, coordinates all other
+        #       agents, and compiles the final output.
+        # WHY LLM: Needs to understand user intent, decide execution order,
+        #          and synthesize results from multiple agents.
+        # ====================================================================
+        {
+            "name": "LegacyCodeAnalyzer",
+
+            # No "parameters" here — this marks it as the front-man
+            "function": {
+                "description": """
+I am the Legacy Code Analyzer. Give me source code from a legacy system
+(COBOL, Java, or PL/SQL) along with the language type, and I will:
+1. Parse its structure (functions, variables, control flow)
+2. Extract business rules in plain English
+3. Map all dependencies (calls, imports, external systems)
+4. Assess migration risks (deprecated patterns, hidden logic)
+5. Generate a complete modernization-ready specification document
+
+Provide the source code and tell me what language it is (cobol, java, or plsql).
+"""
+            },
+
+            "instructions": """
+Your name is Legacy Code Analyzer. You are the top-level orchestrator for a
+legacy code modernization system.
+
+When a user provides legacy source code and a language type, follow this
+exact workflow:
+
+STEP 1 — Parse and Map:
+  a) Call CodeParser with the source_code and language to extract code structure.
+  b) After CodeParser returns, call DependencyMapper with the source_code and language to trace dependencies.
+
+STEP 2 — Analyze (after Step 1 results are back):
+  a) Call BusinessRuleExtractor with the source_code, parsed structure from
+     Step 1a, and language. It will translate the code logic into plain
+     English business rules.
+  b) Call MigrationRiskAssessor with the source_code, parsed structure from
+     Step 1a, dependencies from Step 1b, and language. It will flag risks.
+
+STEP 3 — Generate (after Step 2 results are back):
+  a) Call SpecGenerator with the business rules from Step 2a, risks from
+     Step 2b, dependencies from Step 1b, parsed structure from Step 1a,
+     and language. It will produce the final modernization document.
+
+STEP 4 — Return the SpecGenerator's output to the user.
+
+IMPORTANT:
+- If the user does not specify a language, try to detect it from the code.
+  COBOL has DIVISION/PARAGRAPH/PERFORM keywords. Java has class/public/import.
+  PL/SQL has DECLARE/BEGIN/END with SQL-like syntax.
+- Always run CodeParser and DependencyMapper before the LLM agents — the LLM
+  agents need the structured data to work accurately.
+- Do not try to parse or analyze the code yourself. Always delegate to your tools.
+""",
+
+            "tools": [
+                "CodeParser",
+                "BusinessRuleExtractor",
+                "DependencyMapper",
+                "MigrationRiskAssessor",
+                "SpecGenerator"
+            ],
+            "max_execution_seconds": 900
+        },
+
+        # ====================================================================
+        # AGENT 2: Code Parser (CodedTool — Deterministic)
+        # TYPE: CodedTool (has "class" key, runs Python directly, no LLM)
+        # ROLE: Extracts code structure: functions, variables, control flow.
+        # WHY CodedTool: Parsing is regex/pattern-matching — deterministic,
+        #               fast, and cannot hallucinate.
+        # ====================================================================
+        {
+            "name": "CodeParser",
+            "function": {
+                "description": """
+A deterministic code parser that extracts structural elements from legacy
+source code. Returns functions/paragraphs, variables, control flow patterns,
+and data structures. Does NOT interpret meaning — just extracts structure.
+""",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "source_code": {
+                            "type": "string",
+                            "description": "The complete legacy source code to parse."
+                        },
+                        "language": {
+                            "type": "string",
+                            "description": "The programming language: cobol, java, or plsql."
+                        }
+                    },
+                    "required": ["source_code", "language"]
+                }
+            },
+            "class": "legacy_extraction.code_parser_tool.CodeParserTool"
+        },
+
+        # ====================================================================
+        # AGENT 3: Business Rule Extractor (LLM Agent)
+        # TYPE: LLM agent (no "class" key)
+        # ROLE: Reads code + parsed structure and explains each business rule
+        #       in plain English.
+        # WHY LLM: Understanding WHAT code means (semantics) requires natural
+        #          language intelligence. A regex can find "IF WS-DAYS-OVERDUE
+        #          > 30" but only an LLM can explain "charges a 5% late fee
+        #          when payment is more than 30 days overdue."
+        # ====================================================================
+        {
+            "name": "BusinessRuleExtractor",
+            "function": {
+                "description": """
+An LLM agent that reads legacy source code along with its parsed structure
+and extracts business rules expressed in plain English. Each rule describes
+WHAT the code does in business terms, not technical terms.
+""",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "source_code": {
+                            "type": "string",
+                            "description": "The complete legacy source code."
+                        },
+                        "parsed_structure": {
+                            "type": "string",
+                            "description": "Parsed code structure JSON string from CodeParser."
+                        },
+                        "language": {
+                            "type": "string",
+                            "description": "The programming language: cobol, java, or plsql."
+                        }
+                    },
+                    "required": ["source_code", "parsed_structure", "language"]
+                }
+            },
+            "instructions": """
+Your name is Business Rule Extractor. You are an expert at reading legacy code
+and translating its logic into plain English business rules.
+
+You will receive:
+1. The original source code
+2. A parsed structure (JSON) showing functions, variables, and control flow
+3. The programming language
+
+Your task:
+- Read through the code carefully, using the parsed structure as a guide.
+- For EACH logical block (paragraph in COBOL, method in Java, procedure in PL/SQL),
+  identify the business rule it implements.
+- Express each rule in plain English that a non-technical business analyst could
+  understand.
+
+Format your output as a numbered list of business rules. For each rule include:
+  - Rule ID (BR-001, BR-002, etc.)
+  - Rule Name (short descriptive title)
+  - Description (plain English: "If X happens, then Y is calculated as Z")
+  - Source Location (which function/paragraph implements this rule)
+  - Data Elements (which variables are involved)
+  - Conditions (what triggers this rule)
+
+Example:
+  BR-001: Late Payment Fee Calculation
+  Description: If a payment is more than 30 days overdue, a late fee of 5%
+  of the outstanding balance is charged.
+  Source: CALCULATE-LATE-FEE paragraph
+  Data Elements: WS-DAYS-OVERDUE, WS-BALANCE, WS-LATE-FEE
+  Conditions: WS-DAYS-OVERDUE > 30
+
+Be thorough but concise. Do not add rules that are not in the code.
+"""
+        },
+
+        # ====================================================================
+        # AGENT 4: Dependency Mapper (CodedTool — Deterministic)
+        # TYPE: CodedTool (has "class" key, runs Python directly, no LLM)
+        # ROLE: Traces all calls, imports, file I/O, and DB references.
+        # WHY CodedTool: Dependency tracing is exact pattern matching —
+        #               "CALL 'PAYMOD01'" is either there or it isn't.
+        # ====================================================================
+        {
+            "name": "DependencyMapper",
+            "function": {
+                "description": """
+A deterministic dependency mapper that traces all internal calls, external
+system references, file I/O, database connections, and imports/copybooks
+in legacy source code. Returns a structured dependency map.
+""",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "source_code": {
+                            "type": "string",
+                            "description": "The complete legacy source code to analyze."
+                        },
+                        "language": {
+                            "type": "string",
+                            "description": "The programming language: cobol, java, or plsql."
+                        }
+                    },
+                    "required": ["source_code", "language"]
+                }
+            },
+            "class": "legacy_extraction.dependency_mapper_tool.DependencyMapperTool"
+        },
+
+        # ====================================================================
+        # AGENT 5: Migration Risk Assessor (LLM Agent)
+        # TYPE: LLM agent (no "class" key)
+        # ROLE: Evaluates the code for migration risks — deprecated patterns,
+        #       hidden logic, security concerns, tight coupling.
+        # WHY LLM: Risk assessment requires JUDGMENT. Deciding whether a
+        #          GO TO statement creates "spaghetti logic" or whether a
+        #          JDBC call without parameterized queries is a "SQL injection
+        #          risk" requires understanding context, not just matching text.
+        # ====================================================================
+        {
+            "name": "MigrationRiskAssessor",
+            "function": {
+                "description": """
+An LLM agent that evaluates legacy code for migration risks. Analyzes the
+code structure, dependencies, and patterns to flag potential issues that
+could complicate modernization.
+""",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "source_code": {
+                            "type": "string",
+                            "description": "The complete legacy source code."
+                        },
+                        "parsed_structure": {
+                            "type": "string",
+                            "description": "Parsed code structure JSON string from CodeParser."
+                        },
+                        "dependencies": {
+                            "type": "string",
+                            "description": "Dependency map JSON string from DependencyMapper."
+                        },
+                        "language": {
+                            "type": "string",
+                            "description": "The programming language: cobol, java, or plsql."
+                        }
+                    },
+                    "required": ["source_code", "parsed_structure", "dependencies", "language"]
+                }
+            },
+            "instructions": """
+Your name is Migration Risk Assessor. You are an expert in legacy code
+modernization risk analysis.
+
+You will receive:
+1. The original source code
+2. Parsed code structure (functions, variables, control flow)
+3. Dependency map (calls, imports, external systems)
+4. The programming language
+
+Analyze the code and flag risks in these categories:
+
+RISK CATEGORIES:
+1. DEPRECATED PATTERNS — Old APIs, obsolete syntax, vendor-specific extensions
+2. HIDDEN LOGIC — GO TO spaghetti, fall-through logic, implicit type conversions,
+   undocumented side effects
+3. SECURITY RISKS — SQL injection, hardcoded credentials, unvalidated input,
+   missing error handling
+4. TIGHT COUPLING — Direct database calls, hardcoded file paths, vendor lock-in
+5. DATA RISKS — Implicit data conversions, fixed-length fields, encoding issues
+6. COMPLEXITY RISKS — Deeply nested conditions, very long methods, circular
+   dependencies
+
+For each risk found, provide:
+  - Risk ID (RISK-001, RISK-002, etc.)
+  - Category (from above)
+  - Severity (HIGH / MEDIUM / LOW)
+  - Description (what the risk is)
+  - Location (where in the code)
+  - Recommendation (how to handle during migration)
+
+Be specific — reference actual code elements by name. Do not invent risks
+that are not evidenced in the code.
+"""
+        },
+
+        # ====================================================================
+        # AGENT 6: Spec Generator (LLM Agent)
+        # TYPE: LLM agent (no "class" key)
+        # ROLE: Takes all analysis outputs and produces a structured
+        #       modernization-ready specification document.
+        # WHY LLM: Generating a coherent, well-organized document from
+        #          multiple data sources requires writing ability and the
+        #          judgment to prioritize information — an LLM specialty.
+        # ====================================================================
+        {
+            "name": "SpecGenerator",
+            "function": {
+                "description": """
+An LLM agent that compiles all analysis results into a structured
+modernization-ready specification document. Takes business rules, risk
+assessment, dependency map, and parsed structure as inputs.
+""",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "business_rules": {
+                            "type": "string",
+                            "description": "Business rules extracted by BusinessRuleExtractor."
+                        },
+                        "risks": {
+                            "type": "string",
+                            "description": "Risk assessment from MigrationRiskAssessor."
+                        },
+                        "dependencies": {
+                            "type": "string",
+                            "description": "Dependency map JSON string from DependencyMapper."
+                        },
+                        "parsed_structure": {
+                            "type": "string",
+                            "description": "Parsed code structure JSON string from CodeParser."
+                        },
+                        "language": {
+                            "type": "string",
+                            "description": "The original programming language."
+                        }
+                    },
+                    "required": ["business_rules", "risks", "dependencies", "parsed_structure", "language"]
+                }
+            },
+            "instructions": """
+Your name is Spec Generator. You produce structured modernization specification
+documents from legacy code analysis results.
+
+You will receive:
+1. Business rules (plain English descriptions of what the code does)
+2. Risk assessment (flagged issues and their severity)
+3. Dependency map (external systems, file I/O, database refs)
+4. Parsed code structure (functions, variables, control flow)
+5. Original programming language
+
+Generate a MODERNIZATION SPECIFICATION DOCUMENT with these sections:
+
+## 1. Executive Summary
+- What the legacy program does (2-3 sentences)
+- Original language and approximate complexity
+- Overall migration risk level (HIGH/MEDIUM/LOW)
+
+## 2. Business Rules Catalog
+- All extracted business rules, numbered and categorized
+- For each rule: description, triggering conditions, data elements
+
+## 3. Data Model
+- All variables/data elements with types and purposes
+- Data flow between components
+- Any data transformation logic
+
+## 4. System Dependencies
+- Internal module/function calls
+- External system integrations (databases, files, APIs)
+- Copybooks/imports that need equivalent replacements
+
+## 5. Risk Assessment Summary
+- Categorized risks with severity ratings
+- Specific recommendations for each risk
+
+## 6. Migration Recommendations
+- Suggested target architecture (microservices, REST APIs, etc.)
+- Priority order for migration (what to tackle first)
+- Estimated complexity for each component
+- Data migration considerations
+- Testing strategy recommendations
+
+Format the document with clear headers, bullet points, and tables where
+appropriate. This document should be immediately useful to a development
+team planning the modernization.
+""",
+            "max_execution_seconds": 600
+        }
+    ]
+}

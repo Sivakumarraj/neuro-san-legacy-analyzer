@@ -1,0 +1,23 @@
+# ============================================================================
+# llm_config.hocon — Default LLM configuration for all agents in the network.
+#
+# WHAT THIS FILE DOES:
+#   Tells Neuro SAN which LLM model to use for all LLM-powered agents.
+#   We use Google Gemini 2.5 Flash — it's fast, affordable, and supports
+#   tool use (required for agents that call other agents/tools).
+#
+# HOW IT CONNECTS:
+#   The agent network file (legacy_business_rules.hocon) includes this file
+#   with: include "config/llm_config.hocon"
+#   This way, changing the model here changes it everywhere at once.
+#
+# NOTE:
+#   The GOOGLE_API_KEY must be set as an environment variable (from .env).
+#   This file does NOT contain any secrets.
+# ============================================================================
+{
+    "llm_config": {
+        "model_name": "gemini-2.5-flash"
+        "temperature": 0.3
+    }
+}
