@@ -1,4 +1,4 @@
-# Legacy Business-Rule Extraction Agent Network
+# Neuro SAN Example: Legacy Code Analyzer
 
 > Extract business rules from legacy code (COBOL, Java, PL/SQL) and output a
 > modernization-ready specification — powered by
